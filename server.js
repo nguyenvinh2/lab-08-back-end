@@ -23,8 +23,8 @@ clients.on('error', err => console.error(err));
 
 app.get('/location', searchLocation);
 // constructor function for geolocation - called upon inside the request for location
-function LocationData(result, request) {
-  this.search_query = request.query.data;
+function LocationData(query, result) {
+  this.search_query = query;
   this.formatted_query = result.body.results[0].formatted_address;
   this.latitude = result.body.results[0].geometry.location.lat;
   this.longitude = result.body.results[0].geometry.location.lng;
@@ -32,6 +32,7 @@ function LocationData(result, request) {
 }
 
 Weather.tableName = 'weathers';
+LocationData.tableName = 'locations';
 //send request to DarkSkys API and gets data back, then calls on Weather function to display data
 function getWeather(request, response) {
   Weather.lookup({
@@ -125,7 +126,6 @@ function handleError(err, res) {
 LocationData.lookupLocation = (location) => {
   const SQL = `SELECT * FROM locations WHERE search_query=$1;`;
   const values = [location.query];
-
   return clients.query(SQL, values)
     .then(result => {
       if (result.rowCount > 0) {
@@ -140,24 +140,21 @@ LocationData.lookupLocation = (location) => {
 function searchLocation(request, response) {
   LocationData.lookupLocation({
     tableName: LocationData.tableName,
-
     query: request.query.data,
     cacheHit: function (result) {
       response.send(result);
     },
-
     cacheMiss: function () {
-      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${this.query}&key=${process.env.GEOCODE_API_KEY}`;
-
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${request.query.data}&key=${process.env.GOOGLE_API_KEY}`;
       return superagent.get(url)
         .then(result => {
-          const location = new Location(this.query, result);
+          const location = new LocationData(this.query, result);
           location.save()
             .then(location => response.send(location));
         })
         .catch(error => handleError(error));
     }
-  })
+  });
 }
 
 Weather.lookup = (options) => {
