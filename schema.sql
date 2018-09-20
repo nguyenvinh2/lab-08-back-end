@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS movies (
   title VARCHAR(255), 
   overview VARCHAR(5000), 
   average_votes NUMERIC(4,2),
-  total_votes NUMERIC(10000,0),
+  total_votes NUMERIC(1000,0),
   image_url VARCHAR(255),
   popularity NUMERIC(4,2),
   released_on VARCHAR(255),
