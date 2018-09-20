@@ -1,0 +1,28 @@
+{
+  "name": "lab-08-back-end",
+  "version": "1.0.0",
+  "description": "Lab 8 SQL",
+  "main": "server.js",
+  "dependencies": {
+    "cors": "^2.8.4",
+    "dotenv": "^6.0.0",
+    "express": "^4.16.3",
+    "superagent": "^4.0.0-beta.5"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nguyenvinh2/lab-08-back-end.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/nguyenvinh2/lab-08-back-end/issues"
+  },
+  "homepage": "https://github.com/nguyenvinh2/lab-08-back-end#readme"
+}
