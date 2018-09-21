@@ -16,6 +16,10 @@ app.get('/movies', getMovies);
 
 app.get('/yelp', getYelp);
 
+app.get('/meetups', getMeetup);
+
+app.get('/trails', getTrails)
+
 const PORT = process.env.PORT || 3000;
 
 const clients = new pg.Client(process.env.DATABASE_URL);
@@ -142,6 +146,29 @@ function MoviesData(movies) {
   this.created_at = Date.now();
 }
 
+
+function getMeetup(request, response){
+  const url = `https://api.meetup.com/2/cities?key=${process.env.MEETUP_API_KEY}&photo-host=public&query=${request.query.data.search_query}&page=10&sign=true`;
+  return superagent.get(url)
+    .then(result => {
+      const meetupSummaries = result.body.results.map(event => {
+        return new MeetupData(event);
+      }) 
+      response.send(meetupSummaries);
+    })
+    .catch(error => handleError(error, response));
+}
+
+function MeetupData(event){
+  this.title = event.title;
+  this.link = event.page_url;
+  this.creation_date = event.created_date;
+  this.host =  event.host;
+}
+
+function getTrails(request, response) {
+  const url = `https://www.hikingproject.com/data/get-trails?lat=40.0274&lon=-105.2519&maxDistance=10&key=200361100-f30148fddbb56d0b545707aeb0cd1379`
+}
 function handleError(err, res) {
   console.error(err);
   if (res) res.status(500).send('Error 505');
