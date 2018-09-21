@@ -25,36 +25,60 @@ clients.on('error', err => console.error(err));
 app.get('/location', searchLocation);
 // constructor function for geolocation - called upon inside the request for location
 function LocationData(query, result) {
+
   this.search_query = query;
   this.formatted_query = result.body.results[0].formatted_address;
   this.latitude = result.body.results[0].geometry.location.lat;
   this.longitude = result.body.results[0].geometry.location.lng;
-  this.time_stamp = Date.now();
+  this.created_at = Date.now();
 }
+
 
 Weather.tableName = 'weathers';
 LocationData.tableName = 'locations';
+
+function Weather(day) {
+  this.tableName = 'weathers';
+  this.time = new Date(day.time * 1000).toString().slice(0, 15);
+  this.forecast = day.summary;
+  this.created_at = Date.now();
+}
+
+Weather.prototype = {
+  save: function (location_id) {
+    const SQL = `INSERT INTO ${this.tableName} (forecast, time, created_at, location_id) VALUES ($1, $2, $3, $4);`;
+    const values = [this.forecast, this.time, this.created_at, location_id];
+    clients.query(SQL, values);
+  }
+}
+
+const eraseTable =  (table, city) => {
+  const SQL = `DELETE from ${table} WHERE location_id=${city};`;
+  return clients.query(SQL);
+}
+
 //send request to DarkSkys API and gets data back, then calls on Weather function to display data
 function getWeather(request, response) {
   Weather.lookup({
     tableName: Weather.tableName,
+    query: request.query.data,
     cacheMiss: function () {
-      const url = `https://api.darksky.net/forecast/${process.env.WEATHER_API_KEY}/${request.query.data.latitude},${request.query.data.longitude}`;
+      const url=`https://api.darksky.net/forecast/${process.env.WEATHER_API_KEY}/${request.query.data.latitude},${request.query.data.longitude}`;
       return superagent.get(url)
-
         .then(result => {
           const weatherSummaries = result.body.daily.data.map(day => {
-            return new Weather(day);
-          })
-          response.send(weatherSummaries)
-          console.log(weatherSummaries);
+            const weatherItem = new Weather(day);
+            weatherItem.save(request.query.data.id);
+            return weatherItem;
+          });
+          response.send(weatherSummaries);
         })
         .catch(error => handleError(error, response));
     },
     cacheHit: function (resultsArray) {
       let ageOfResultsInMinutes = (Date.now() - resultsArray[0].created_at) / (1000 * 60);
       if (ageOfResultsInMinutes > 30) {
-        Weather.deleteByLocationId(Weather.tableName, request.query.data.id);
+        eraseTable(Weather.tableName, request.query.data.id);
         this.cacheMiss();
       } else {
         response.send(resultsArray);
@@ -64,9 +88,10 @@ function getWeather(request, response) {
 }
 
 function Weather(day) {
+  this.tableName = 'weathers';
   this.time = new Date(day.time * 1000).toString().slice(0, 15);
   this.forecast = day.summary;
-  this.time_stamp = Date.now();
+  this.created_at = Date.now();
 }
 
 // Yelp Api request
@@ -80,7 +105,6 @@ function getYelp(request, response) {
         return new Yelp(data);
       });
       response.send(businessSummaries);
-      console.log(businessSummaries);
     })
     .catch(error => handleError(error, response));
 }
@@ -91,7 +115,7 @@ function Yelp(data) {
   this.price = data.price;
   this.rating = data.rating;
   this.url = data.url;
-  this.time_stamp = Date.now();
+  this.created_at = Date.now();
 }
 
 function getMovies(request, response) {
@@ -115,7 +139,7 @@ function MoviesData(movies) {
   this.image_url = `https://image.tmdb.org/t/p/w200_and_h300_bestv2${movies.poster_path}`;
   this.popularity = movies.popularity;
   this.released_on = movies.release_date;
-  this.time_stamp = Date.now();
+  this.created_at = Date.now();
 }
 
 function handleError(err, res) {
@@ -159,8 +183,9 @@ function searchLocation(request, response) {
 }
 
 Weather.lookup = (options) => {
-  const SQL = `SELECT * FROM ${options.tableName} WHERE location_id=$1;`;
-  const values = [location];
+  const SQL = `SELECT * FROM weathers WHERE location_id=$1;`;
+  console.log(options.query);
+  const values = ['4'];
 
   clients.query(SQL, values)
     .then(result => {
@@ -182,15 +207,6 @@ LocationData.prototype = {
         this.id = result.rows[0].id;
         return this;
       });
-  }
-};
-
-Weather.prototype = {
-  save: function (location_id) {
-    const SQL = `INSERT INTO ${this.tableName} (forecast, time, location_id) VALUES ($1, $2, $3, $4);`;
-    const values = [this.forecast, this.time, this.created_at, location_id];
-
-    clients.query(SQL, values);
   }
 }
 

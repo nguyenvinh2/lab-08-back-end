@@ -4,7 +4,8 @@ CREATE TABLE IF NOT EXISTS locations (
   search_query VARCHAR(255), 
   formatted_query VARCHAR(255), 
   latitude NUMERIC(8, 6), 
-  longitude NUMERIC(9, 6) 
+  longitude NUMERIC(9, 6),
+  created_at BIGINT
 );
 
 CREATE TABLE IF NOT EXISTS weathers ( 
@@ -22,7 +23,8 @@ CREATE TABLE IF NOT EXISTS yelp (
   price VARCHAR(4),
   rating NUMERIC(4,2),
   url VARCHAR(255),
-  location_id INTEGER NOT NULL REFERENCES locations(id) 
+  location_id INTEGER NOT NULL REFERENCES locations(id),
+  created_at BIGINT
 );
 
 CREATE TABLE IF NOT EXISTS movies ( 
@@ -34,5 +36,6 @@ CREATE TABLE IF NOT EXISTS movies (
   image_url VARCHAR(255),
   popularity NUMERIC(4,2),
   released_on VARCHAR(255),
+  created_at BIGINT,
   location_id INTEGER NOT NULL REFERENCES locations(id) 
 );
