@@ -20,13 +20,36 @@ app.get('/movies', getMovies);
 app.get('/yelp', getYelp);
 app.get('/location', searchLocation);
 
+
+//Common Functions BLOCK START
 //erase form database
 const eraseTable = (table, city) => {
   const SQL = `DELETE from ${table} WHERE location_id=${city};`;
   return clients.query(SQL);
 }
-//location functions START BLOCK
 
+//lookup database for matches
+function lookUp(options) {
+  const SQL = `SELECT * FROM weathers WHERE location_id=$1;`;
+  const values = [options.query.id];
+  clients.query(SQL, values)
+    .then(result => {
+      if (result.rowCount > 0) {
+        options.cacheHit(result.rows);
+      } else {
+        options.cacheMiss();
+      }
+    })
+    .catch(error => handleError(error));
+}
+
+function handleError(err, res) {
+  console.error(err);
+  if (res) res.status(500).send('Error 505');
+}
+//COMMON Functions BLOCK END
+
+//location functions START BLOCK
 // constructor function for geolocation - called upon inside the request for location
 function LocationData(query, result) {
   this.tableName = 'locations';
@@ -85,7 +108,6 @@ LocationData.prototype = {
       });
   }
 }
-
 //LOCATION FUNCTIONS END BLOCK
 
 //weather functions START BLOCK
@@ -102,20 +124,6 @@ Weather.prototype = {
     const values = [this.forecast, this.time, this.created_at, location_id];
     clients.query(SQL, values);
   }
-}
-
-function lookUp(options) {
-  const SQL = `SELECT * FROM weathers WHERE location_id=$1;`;
-  const values = [options.query.id];
-  clients.query(SQL, values)
-    .then(result => {
-      if (result.rowCount > 0) {
-        options.cacheHit(result.rows);
-      } else {
-        options.cacheMiss();
-      }
-    })
-    .catch(error => handleError(error));
 }
 
 //send request to DarkSkys API and gets data back, then calls on Weather function to display data
@@ -147,11 +155,8 @@ function getWeather(request, response) {
     }
   });
 }
-
 //End weather functions block______________________________________________________________________________________
-
-//
-// Yelp Api request
+// Yelp Constructor Function
 function Yelp(data) {
   this.tableName = 'yelp';
   this.name = data.name;
@@ -162,6 +167,7 @@ function Yelp(data) {
   this.created_at = Date.now();
 }
 
+//Yelp save values into array function
 Yelp.prototype = {
   save: function (location_id) {
     const SQL = `INSERT INTO ${this.tableName} (name, image_url, price, rating, url, location_id) VALUES ($1, $2, $3, $4, $5, $6);`;
@@ -192,7 +198,7 @@ function getYelp(request, response) {
     },
     cacheHit: function (resultsArray) {
       let ageOfResultsInMinutes = (Date.now() - resultsArray[0].created_at) / (1000 * 60);
-      if (ageOfResultsInMinutes > 30) {
+      if (ageOfResultsInMinutes > 120) {
         eraseTable(Yelp.tableName, request.query.data.id);
         this.cacheMiss();
       } else {
@@ -201,20 +207,14 @@ function getYelp(request, response) {
     }
   });
 }
+//YELP BLOCK END
 
-function getMovies(request, response) {
-  const url = `https://api.themoviedb.org/3/search/movie?api_key=${process.env.MOVIES_API_KEY}&query=${request.query.data.search_query}`;
-  return superagent.get(url)
-    .then(result => {
-      const moviesSummaries = result.body.results.map(movies => {
-        return new MoviesData(movies);
-      })
-      response.send(moviesSummaries);
-    })
-    .catch(error => handleError(error, response));
-}
 
+//MOVIES BLOCK START
+
+//Movies save values into array function
 function MoviesData(movies) {
+  this.tableName = 'movies';
   this.title = movies.title;
   this.overview = movies.overview;
   this.average_votes = movies.vote_average;
@@ -225,9 +225,43 @@ function MoviesData(movies) {
   this.created_at = Date.now();
 }
 
-function handleError(err, res) {
-  console.error(err);
-  if (res) res.status(500).send('Error 505');
+MoviesData.prototype = {
+  save: function (location_id) {
+    const SQL = `INSERT INTO ${this.tableName} (title, overview, average_votes, total_votes, image_url, popularity, released_on, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);`;
+    const values = [this.title, this.overview, this.averae_votes, this.total_votes, this.image_url, this.popularity, this.released_on, location_id];
+    clients.query(SQL, values);
+  }
 }
+
+function getMovies(request, response) {
+
+  lookUp({
+    tableName: MoviesData.tableName,
+    query: request.query.data,
+    cacheMiss: function () {
+      const url = `https://api.themoviedb.org/3/search/movie?api_key=${process.env.MOVIES_API_KEY}&query=${request.query.data.search_query}`;
+      return superagent.get(url)
+        .then(result => {
+          const moviesSummaries = result.body.results.map(data => {
+            const moviesItem = new MoviesData(data);
+            moviesItem.save(request.query.data.id);
+            return moviesItem;
+          });
+          response.send(moviesSummaries);
+        })
+        .catch(error => handleError(error, response));
+    },
+    cacheHit: function (resultsArray) {
+      let ageOfResultsInMinutes = (Date.now() - resultsArray[0].created_at) / (1000 * 60);
+      if (ageOfResultsInMinutes > 180) {
+        eraseTable(Yelp.tableName, request.query.data.id);
+        this.cacheMiss();
+      } else {
+        response.send(resultsArray);
+      }
+    }
+  });
+}
+//MOVIES BLOCK END
 
 app.listen(PORT, () => console.log(`Listening on ${PORT}`));
