@@ -1,6 +1,6 @@
 # lab-08-back-end
 
-**Author**: Vinh Nguyen
+**Author**: Vinh Nguyen & Derrick Hwang
 **Version**: 1.0.0 
 
 ## Overview
