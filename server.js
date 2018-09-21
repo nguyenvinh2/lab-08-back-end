@@ -19,6 +19,7 @@ app.get('/weather', getWeather);
 app.get('/movies', getMovies);
 app.get('/yelp', getYelp);
 app.get('/location', searchLocation);
+app.get('/meetups', getMeetup);
 
 
 //Common Functions BLOCK START
@@ -30,11 +31,13 @@ const eraseTable = (table, city) => {
 
 //lookup database for matches
 function lookUp(options) {
-  const SQL = `SELECT * FROM weathers WHERE location_id=$1;`;
+  const SQL = `SELECT * FROM ${options.tableName} WHERE location_id=$1;`;
+  console.log(options.tableName);
   const values = [options.query.id];
   clients.query(SQL, values)
     .then(result => {
       if (result.rowCount > 0) {
+        console.log(result.rows);
         options.cacheHit(result.rows);
       } else {
         options.cacheMiss();
@@ -190,8 +193,6 @@ function getYelp(request, response) {
             yelpItem.save(request.query.data.id);
             return yelpItem;
           });
-          console.log(request.query.data);
-          console.log(businessSummaries);
           response.send(businessSummaries);
         })
         .catch(error => handleError(error, response));
@@ -228,7 +229,7 @@ function MoviesData(movies) {
 MoviesData.prototype = {
   save: function (location_id) {
     const SQL = `INSERT INTO ${this.tableName} (title, overview, average_votes, total_votes, image_url, popularity, released_on, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);`;
-    const values = [this.title, this.overview, this.averae_votes, this.total_votes, this.image_url, this.popularity, this.released_on, location_id];
+    const values = [this.title, this.overview, this.average_votes, this.total_votes, this.image_url, this.popularity, this.released_on, location_id];
     clients.query(SQL, values);
   }
 }
@@ -263,5 +264,52 @@ function getMovies(request, response) {
   });
 }
 //MOVIES BLOCK END
+
+//MEETUP BLOCK START
+function MeetupData(data) {
+  this.tableName = 'meetups';
+  this.title = data.name;
+  this.link = data.link;
+  this.creation_date = new Date(data.created).toString().slice(0, 15)
+  this.host = data.who;
+}
+
+MeetupData.prototype = {
+  save: function (location_id) {
+    const SQL = `INSERT INTO ${this.tableName} (title, link, creation_date, host, location_id) VALUES ($1, $2, $3, $4, $5);`;
+    const values = [this.title, this.link, this.creation_date, this.host, this.image_url, location_id];
+    clients.query(SQL, values);
+  }
+}
+
+function getMeetup(request, response) {
+  lookUp({
+    tableName: MeetupData.tableName,
+    query: request.query.data,
+    cacheMiss: function () {
+      const url = `https://api.meetup.com/find/groups?photo-host=public&location=${request.query.data.search_query}&page=20&key=${process.env.MEETUP_API_KEY}`;
+      return superagent.get(url)
+        .then(result => {
+          const meetupSummaries = result.body.map(data => {
+            console.log(data.name);
+            const meetupItem = new MeetupData(data);
+            meetupItem.save(request.query.data.id);
+            return meetupItem;
+          });
+          response.send(meetupSummaries);
+        })
+        .catch(error => handleError(error, response));
+    },
+    cacheHit: function (resultsArray) {
+      let ageOfResultsInMinutes = (Date.now() - resultsArray[0].created_at) / (1000 * 60);
+      if (ageOfResultsInMinutes > 240) {
+        eraseTable(Yelp.tableName, request.query.data.id);
+        this.cacheMiss();
+      } else {
+        response.send(resultsArray);
+      }
+    }
+  });
+}
 
 app.listen(PORT, () => console.log(`Listening on ${PORT}`));
