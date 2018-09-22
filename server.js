@@ -20,7 +20,7 @@ app.get('/movies', getMovies);
 app.get('/yelp', getYelp);
 app.get('/location', searchLocation);
 app.get('/meetup', getMeetup);
-app.get('/trails'. getTrails);
+// app.get('/trails'. getTrails);
 
 
 
@@ -267,24 +267,51 @@ function getMovies(request, response) {
 }
 //MOVIES BLOCK END
 
-//Meetup BLOCK START
-function getMeetup(request, response){
-  const url = `https://api.meetup.com/2/cities?key=${process.env.MEETUP_API_KEY}&photo-host=public&query=${request.query.data.search_query}&page=10&sign=true`;
-  return superagent.get(url)
-    .then(result => {
-      const meetupSummaries = result.body.results.map(event => {
-        return new MeetupData(event);
-      }) 
-      response.send(meetupSummaries);
-    })
-    .catch(error => handleError(error, response));
-}
-
-function MeetupData(event){
+// Meetup BLOCK START
+function Meetup(event){
+  this.tableName = 'meetups';
   this.title = event.title;
   this.link = event.page_url;
   this.creation_date = event.created_date;
   this.host =  event.host;
+}
+
+Meetup.prototype = {
+  save: function (location_id) {
+    const SQL = `INSERT INTO ${this.tableName} (title, link, creation_date, host) VALUES ($1, $2, $3, $4);`;
+    const values = [this.title, this.link, this.creation_date, this.host, location_id];
+    clients.query(SQL, values);
+  }
+}
+
+function getMeetup(request, response) {
+  lookUp({
+    tableName: Meetup.tableName,
+    query: request.query.data,
+    cacheMiss: function () {
+      const url=`https://api.meetup.com/find/upcoming_events?&sign=true&photo-host=public&lon=-${request.query.data.longitude}&page=20&lat=${request.query.data.latitude}`;
+      
+      return superagent.get(url)
+        .then(result => {
+          const meetupSummaries = result.body.data.map(event => {
+            const meetupItem = new Meetup(event);
+            meetupItem.save(request.query.data.id);
+            return meetupItem;
+          });
+          response.send(meetupSummaries);
+        })
+        .catch(error => handleError(error, response));
+    },
+    cacheHit: function (resultsArray) {
+      let ageOfResultsInMinutes = (Date.now() - resultsArray[0].created_at) / (1000 * 60);
+      if (ageOfResultsInMinutes > 30) {
+        eraseTable(Meetup.tableName, request.query.data.id);
+        this.cacheMiss();
+      } else {
+        response.send(resultsArray);
+      }
+    }
+  });
 }
 
 //MEETUP BLOCK END
@@ -292,9 +319,9 @@ function MeetupData(event){
 
 //MEEUP BLOCK START
 
-function getTrails(request, response) {
-  const url = `https://www.hikingproject.com/data/get-trails?lat=40.0274&lon=-105.2519&maxDistance=10&key=200361100-f30148fddbb56d0b545707aeb0cd1379`
-}
+// function getTrails(request, response) {
+//   const url = `https://www.hikingproject.com/data/get-trails?lat=40.0274&lon=-105.2519&maxDistance=10&key=200361100-f30148fddbb56d0b545707aeb0cd1379`
+// }
 
 
 //MEETUP BLOCK END
